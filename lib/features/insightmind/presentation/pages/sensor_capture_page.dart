@@ -1,25 +1,30 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Tambahkan Riverpod
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../data/repositories/sensor_repository.dart';
 import '../../../models/feature_vector.dart';
 import '../../domain/predict_risk_ai.dart';
+import '../providers/ppg_provider.dart'; // Import Provider
 
-class SensorCapturePage extends StatefulWidget {
+// Ubah ke ConsumerStatefulWidget agar bisa update provider
+class SensorCapturePage extends ConsumerStatefulWidget {
   const SensorCapturePage({super.key});
 
   @override
-  State<SensorCapturePage> createState() => _SensorCapturePageState();
+  ConsumerState<SensorCapturePage> createState() => _SensorCapturePageState();
 }
 
-class _SensorCapturePageState extends State<SensorCapturePage> {
+class _SensorCapturePageState extends ConsumerState<SensorCapturePage> {
   CameraController? _cameraController;
   bool _isCameraInitialized = false;
   bool _isRecording = false;
-  int _timeLeft = 30;
-  Timer? _timer;
+
+  // Timer dihapus sesuai permintaan
+  // int _timeLeft = 30;
+  // Timer? _timer;
 
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -62,7 +67,7 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
 
     _cameraController = CameraController(
       _cameras[_selectedCameraIndex],
-      ResolutionPreset.high,
+      ResolutionPreset.medium, // Menggunakan medium agar performa lebih stabil
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
@@ -90,7 +95,6 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
 
     setState(() {
       _isRecording = true;
-      _timeLeft = 30;
       _predictionResult = null;
       _accelerometerMagnitudes.clear();
       _ppgIntensities.clear();
@@ -110,17 +114,10 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
       _ppgIntensities.add(intensity);
     });
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeLeft > 0) {
-        setState(() => _timeLeft--);
-      } else {
-        _stopCapture();
-      }
-    });
+    // Timer dihapus, capture berjalan sampai user menekan stop
   }
 
   void _stopCapture() async {
-    _timer?.cancel();
     _accelSubscription?.cancel();
 
     if (_cameraController != null && _cameraController!.value.isStreamingImages) {
@@ -133,6 +130,7 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
   }
 
   void _processData() {
+    // 1. Hitung Statistik
     double accelVariance = _sensorRepo.calculateVariance(_accelerometerMagnitudes);
     double ppgVariance = _sensorRepo.calculateVariance(_ppgIntensities);
 
@@ -144,8 +142,12 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
         ? 0
         : _ppgIntensities.reduce((a, b) => a + b) / _ppgIntensities.length;
 
-    double dummyScreeningScore = 15.0;
+    // 2. UPDATE PROVIDER (Menyimpan data ke State Global agar muncul di halaman depan)
+    // List _ppgIntensities dikirim sebagai samples
+    ref.read(ppgProvider.notifier).updateData(_ppgIntensities, ppgMean, ppgVariance);
 
+    // 3. AI Prediction Logic (Opsional, tetap dibiarkan)
+    double dummyScreeningScore = 15.0;
     final features = FeatureVector(
       screeningScore: dummyScreeningScore,
       activityVar: accelVariance,
@@ -163,7 +165,6 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
 
   @override
   void dispose() {
-    _timer?.cancel();
     _accelSubscription?.cancel();
     _cameraController?.dispose();
     super.dispose();
@@ -172,7 +173,7 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           // 1. Full-screen Camera Background
@@ -182,10 +183,11 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
                 : const Center(child: CircularProgressIndicator()),
           ),
 
+          // 2. Overlay Bingkai
           Positioned.fill(
             child: ColorFiltered(
               colorFilter: ColorFilter.mode(
-                Colors.black.withOpacity(0.4),
+                Colors.black.withOpacity(0.5),
                 BlendMode.srcOut,
               ),
               child: Stack(
@@ -212,6 +214,7 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
             ),
           ),
 
+          // 3. UI Header
           SafeArea(
             child: Column(
               children: [
@@ -239,7 +242,7 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 30),
                   child: Text(
-                    'Posisikan wajah atau jari Anda pada area bingkai untuk memulai pemindaian.',
+                    'Posisikan wajah atau jari Anda pada area bingkai lalu tekan tombol fingerprint.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
@@ -248,6 +251,7 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
             ),
           ),
 
+          // 4. Garis Bingkai Putih
           Align(
             alignment: Alignment.center,
             child: Container(
@@ -260,72 +264,63 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
             ),
           ),
 
+          // 5. Controls Bottom (Tanpa Timer Merah)
           Positioned(
             bottom: 40,
             left: 0,
             right: 0,
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                if (_isRecording)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                // Switch Camera Button
+                _buildSecondaryButton(
+                  icon: Icons.flip_camera_ios,
+                  onPressed: _switchCamera,
+                ),
+
+                // Main Capture Button (Start / Stop)
+                GestureDetector(
+                  onTap: () {
+                    if (_isRecording) {
+                      _stopCapture(); // Klik kedua: Stop & Analisis
+                    } else {
+                      _startCapture(); // Klik pertama: Start
+                    }
+                  },
+                  child: Container(
+                    height: 85,
+                    width: 85,
+                    padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      borderRadius: BorderRadius.circular(20),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
                     ),
-                    child: Text(
-                      'Pindaian Berlangsung: $_timeLeft s',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildSecondaryButton(
-                      icon: Icons.flip_camera_ios,
-                      onPressed: _switchCamera,
-                    ),
-
-
-                    GestureDetector(
-                      onTap: _isRecording ? null : _startCapture,
-                      child: Container(
-                        height: 85,
-                        width: 85,
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _isRecording ? Colors.grey : Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _isRecording ? Icons.hourglass_bottom : Icons.fingerprint,
-                            size: 40,
-                            color: Colors.blueAccent,
-                          ),
-                        ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _isRecording ? Colors.redAccent : Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isRecording ? Icons.stop : Icons.fingerprint,
+                        size: 40,
+                        color: _isRecording ? Colors.white : Colors.blueAccent,
                       ),
                     ),
+                  ),
+                ),
 
-                    _buildSecondaryButton(
-                      icon: Icons.flashlight_on,
-                      onPressed: () {
-                        if (_cameraController != null) {
-                          _cameraController!.setFlashMode(
-                            _cameraController!.value.flashMode == FlashMode.torch
-                                ? FlashMode.off
-                                : FlashMode.torch,
-                          );
-                        }
-                      },
-                    ),
-                  ],
+                // Flash Button
+                _buildSecondaryButton(
+                  icon: Icons.flashlight_on,
+                  onPressed: () {
+                    if (_cameraController != null) {
+                      _cameraController!.setFlashMode(
+                        _cameraController!.value.flashMode == FlashMode.torch
+                            ? FlashMode.off
+                            : FlashMode.torch,
+                      );
+                    }
+                  },
                 ),
               ],
             ),
@@ -389,8 +384,11 @@ class _SensorCapturePageState extends State<SensorCapturePage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () => setState(() => _predictionResult = null),
-                  child: const Text('Tutup', style: TextStyle(color: Colors.white, fontSize: 16)),
+                  onPressed: () {
+                    setState(() => _predictionResult = null);
+                    Navigator.pop(context); // Kembali ke halaman utama setelah hasil
+                  },
+                  child: const Text('Simpan & Tutup', style: TextStyle(color: Colors.white, fontSize: 16)),
                 ),
               ),
             ],

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../providers/analysis_provider.dart';
+import 'package:insightmind_app/core/service/pdf_service.dart';
 
 class ReportsPage extends ConsumerWidget {
   const ReportsPage({super.key});
@@ -17,6 +18,19 @@ class ReportsPage extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.black,
+        actions: [
+          // --- FITUR EXPORT PDF (Posisi Kanan Atas) ---
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: IconButton(
+              onPressed: () {
+                PdfService.exportAnalysisPDF(analysis);
+              },
+              icon: const Icon(Icons.picture_as_pdf, color: Color(0xFF6366F1)),
+              tooltip: 'Export PDF',
+            ),
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -140,8 +154,8 @@ class ReportsPage extends ConsumerWidget {
                           colors: analysis.overallRisk == 'Tinggi'
                               ? [const Color(0xFFEF4444), const Color(0xFFF87171)]
                               : analysis.overallRisk == 'Sedang'
-                                  ? [const Color(0xFFF59E0B), const Color(0xFFFBBF24)]
-                                  : [const Color(0xFF10B981), const Color(0xFF34D399)],
+                              ? [const Color(0xFFF59E0B), const Color(0xFFFBBF24)]
+                              : [const Color(0xFF10B981), const Color(0xFF34D399)],
                         ),
                       ),
                       _ModernAnalysisItem(
@@ -284,120 +298,120 @@ class ReportsPage extends ConsumerWidget {
                     height: 250,
                     child: analysis.recentTrends.isEmpty
                         ? Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey[50],
-                              borderRadius: BorderRadius.circular(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.show_chart,
+                              size: 48,
+                              color: Colors.grey,
                             ),
-                            child: const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.show_chart,
-                                    size: 48,
-                                    color: Colors.grey,
+                            SizedBox(height: 8),
+                            Text(
+                              'Belum ada data tren',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                        : LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          horizontalInterval: 5,
+                          getDrawingHorizontalLine: (value) {
+                            return FlLine(
+                              color: Colors.grey.withOpacity(0.2),
+                              strokeWidth: 1,
+                            );
+                          },
+                        ),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 40,
+                              getTitlesWidget: (value, meta) {
+                                return Text(
+                                  value.toInt().toString(),
+                                  style: const TextStyle(
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 12,
                                   ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Belum ada data tren',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                if (value.toInt() >= 0 && value.toInt() < analysis.recentTrends.length) {
+                                  final date = analysis.recentTrends[value.toInt()]['date'] as DateTime;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      DateFormat('dd/MM').format(date),
+                                      style: const TextStyle(
+                                        color: Color(0xFF6B7280),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return const Text('');
+                              },
+                            ),
+                          ),
+                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        minX: 0,
+                        maxX: (analysis.recentTrends.length - 1).toDouble(),
+                        minY: 0,
+                        maxY: 30,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: analysis.recentTrends.asMap().entries.map((entry) {
+                              return FlSpot(entry.key.toDouble(), (entry.value['score'] as int).toDouble());
+                            }).toList(),
+                            isCurved: true,
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                            ),
+                            barWidth: 4,
+                            belowBarData: BarAreaData(
+                              show: true,
+                              gradient: LinearGradient(
+                                colors: [
+                                  const Color(0xFF6366F1).withOpacity(0.3),
+                                  const Color(0xFF8B5CF6).withOpacity(0.1),
                                 ],
                               ),
                             ),
-                          )
-                        : LineChart(
-                            LineChartData(
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: false,
-                                horizontalInterval: 5,
-                                getDrawingHorizontalLine: (value) {
-                                  return FlLine(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    strokeWidth: 1,
-                                  );
-                                },
-                              ),
-                              titlesData: FlTitlesData(
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 40,
-                                    getTitlesWidget: (value, meta) {
-                                      return Text(
-                                        value.toInt().toString(),
-                                        style: const TextStyle(
-                                          color: Color(0xFF6B7280),
-                                          fontSize: 12,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (value, meta) {
-                                      if (value.toInt() >= 0 && value.toInt() < analysis.recentTrends.length) {
-                                        final date = analysis.recentTrends[value.toInt()]['date'] as DateTime;
-                                        return Padding(
-                                          padding: const EdgeInsets.only(top: 8),
-                                          child: Text(
-                                            DateFormat('dd/MM').format(date),
-                                            style: const TextStyle(
-                                              color: Color(0xFF6B7280),
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      return const Text('');
-                                    },
-                                  ),
-                                ),
-                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              ),
-                              borderData: FlBorderData(show: false),
-                              minX: 0,
-                              maxX: (analysis.recentTrends.length - 1).toDouble(),
-                              minY: 0,
-                              maxY: 30,
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: analysis.recentTrends.asMap().entries.map((entry) {
-                                    return FlSpot(entry.key.toDouble(), (entry.value['score'] as int).toDouble());
-                                  }).toList(),
-                                  isCurved: true,
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                                  ),
-                                  barWidth: 4,
-                                  belowBarData: BarAreaData(
-                                    show: true,
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        const Color(0xFF6366F1).withOpacity(0.3),
-                                        const Color(0xFF8B5CF6).withOpacity(0.1),
-                                      ],
-                                    ),
-                                  ),
-                                  dotData: FlDotData(
-                                    show: true,
-                                    getDotPainter: (spot, percent, barData, index) {
-                                      return FlDotCirclePainter(
-                                        radius: 6,
-                                        color: Colors.white,
-                                        strokeWidth: 3,
-                                        strokeColor: const Color(0xFF6366F1),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
+                            dotData: FlDotData(
+                              show: true,
+                              getDotPainter: (spot, percent, barData, index) {
+                                return FlDotCirclePainter(
+                                  radius: 6,
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                  strokeColor: const Color(0xFF6366F1),
+                                );
+                              },
                             ),
                           ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
