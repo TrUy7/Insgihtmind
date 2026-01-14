@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../domain/entities/daily_journal.dart';
 import '../providers/journal_provider.dart';
 import 'package:insightmind_app/core/api_config.dart';
+import 'package:insightmind_app/core/service/pdf_service.dart'; // Import PDF Service
 
 class DailyJournalPage extends ConsumerStatefulWidget {
   const DailyJournalPage({super.key});
@@ -36,7 +37,7 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
 
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
-        ref.read(journalProvider.notifier).clearJournal(); 
+        ref.read(journalProvider.notifier).clearJournal();
         for (var item in data) {
           ref.read(journalProvider.notifier).addJournal(DailyJournal.fromJson(item));
         }
@@ -52,10 +53,7 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
     try {
       await http.post(
         Uri.parse(ApiConfig.journal),
-        headers: {
-          'Content-Type': 'application/json',
-          ...ApiConfig.headers,
-        },
+        headers: ApiConfig.headers,
         body: jsonEncode(journal.toJson()),
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
@@ -74,6 +72,64 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
     }
   }
 
+  // --- LOGIKA HAPUS SEMUA (MENGGUNAKAN ENDPOINT BACKEND /journal/all) ---
+  Future<void> _deleteAllJournals() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Panggil API Backend yang sudah Anda buat
+      final response = await http.delete(
+        Uri.parse('${ApiConfig.journal}/all'),
+        headers: ApiConfig.headers,
+      );
+
+      if (response.statusCode == 200) {
+        // Hapus dari state lokal
+        ref.read(journalProvider.notifier).clearJournal();
+
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Seluruh catatan harian berhasil dihapus.'))
+          );
+        }
+      } else {
+        throw Exception('Gagal menghapus data di server');
+      }
+    } catch (e) {
+      debugPrint("Error Delete All: $e");
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menghapus: $e'))
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showDeleteAllConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Semua Data?'),
+        content: const Text('Apakah anda ingin menghapus seluruh catatan harian?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tidak')
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Tutup dialog
+              _deleteAllJournals();   // Eksekusi hapus
+            },
+            child: const Text('Ya', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- UI COMPONENTS ---
   @override
   Widget build(BuildContext context) {
@@ -83,28 +139,41 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
       appBar: AppBar(
         title: const Text('Catatan Harian'),
         actions: [
+          // TOMBOL EXPORT PDF
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchJournals,
+            icon: const Icon(Icons.print),
+            tooltip: 'Export PDF',
+            onPressed: journals.isEmpty
+                ? null
+                : () => PdfService.exportJournalPDF(journals),
           ),
+          // TOMBOL HAPUS SEMUA (Menggantikan Refresh)
+          IconButton(
+            icon: const Icon(Icons.delete_forever, color: Colors.red),
+            tooltip: 'Hapus Semua',
+            onPressed: journals.isEmpty
+                ? null
+                : _showDeleteAllConfirmation,
+          ),
+          // Tombol Tambah
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => _showAddJournalDialog(context, ref),
           ),
         ],
       ),
-      body: _isLoading 
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : journals.isEmpty
-              ? const Center(child: Text('Belum ada catatan harian.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: journals.length,
-                  itemBuilder: (context, index) {
-                    final journal = journals[index];
-                    return _buildJournalCard(journal);
-                  },
-                ),
+          ? const Center(child: Text('Belum ada catatan harian.'))
+          : ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: journals.length,
+        itemBuilder: (context, index) {
+          final journal = journals[index];
+          return _buildJournalCard(journal);
+        },
+      ),
     );
   }
 
@@ -164,7 +233,7 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
     }
   }
 
-  // --- DIALOGS (Sesuai Foto image_608203.png) ---
+  // --- DIALOGS ---
 
   void _showAddJournalDialog(BuildContext context, WidgetRef ref) {
     final contentController = TextEditingController();
@@ -233,7 +302,7 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
                   );
                   Navigator.pop(context);
                   ref.read(journalProvider.notifier).addJournal(journal);
-                  await _saveToCloud(journal); 
+                  await _saveToCloud(journal);
                 }
               },
               child: const Text('Simpan'),
@@ -287,7 +356,7 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
                 final updated = DailyJournal(id: journal.id, date: selectedDate, content: contentController.text, mood: selectedMood);
                 Navigator.pop(context);
                 ref.read(journalProvider.notifier).updateJournal(updated);
-                await _saveToCloud(updated); 
+                await _saveToCloud(updated);
               },
               child: const Text('Simpan'),
             ),

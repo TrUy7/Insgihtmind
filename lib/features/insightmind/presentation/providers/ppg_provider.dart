@@ -41,71 +41,19 @@ class PpgNotifier extends StateNotifier<PpgState> {
 
   CameraController? _controller;
 
-  // Fungsi untuk update manual dari file lain
+  // --- INI FUNGSI PENTING YANG DIPANGGIL OLEH SENSOR_CAPTURE_PAGE ---
   void updateData(List<double> samples, double mean, double variance) {
     state = state.copyWith(
       samples: samples,
       mean: mean,
       variance: variance,
+      capturing: false, // Pastikan status capturing mati
     );
   }
 
-  Future<void> startCapture() async {
-    if (state.capturing) return;
-
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) throw Exception("No camera found");
-
-    _controller = CameraController(
-      cameras.first,
-      ResolutionPreset.low,
-      enableAudio: false,
-    );
-
-    await _controller!.initialize();
-    state = state.copyWith(capturing: true);
-
-    _controller!.startImageStream((image) {
-      if (!state.capturing) return;
-
-      final plane = image.planes[0];
-      final buffer = plane.bytes;
-
-      double sum = 0;
-      int count = 0;
-
-      for (int i = 0; i < buffer.length; i += 50) {
-        sum += buffer[i];
-        count++;
-      }
-
-      final meanY = sum / max(1, count);
-      final newSamples = [...state.samples, meanY];
-      if (newSamples.length > 300) newSamples.removeAt(0);
-
-      final mean = newSamples.reduce((a, b) => a + b) / newSamples.length.toDouble();
-
-      final variance = newSamples.length > 1
-          ? newSamples.fold<double>(0.0, (s, x) => s + pow(x - mean, 2)) /
-          (newSamples.length - 1)
-          : 0.0;
-
-      state = state.copyWith(
-        samples: newSamples,
-        mean: mean,
-        variance: variance,
-      );
-    });
-  }
-
-  Future<void> stopCapture() async {
-    if (_controller != null) {
-      try {
-        await _controller!.stopImageStream();
-      } catch (_) {}
-      await _controller!.dispose();
-    }
-    _controller = null;
-    state = state.copyWith(capturing: false);
-  }
+  // Fungsi startCapture/stopCapture bawaan provider ini tidak dipakai lagi
+  // karena logika kamera dipindah ke sensor_capture_page.dart
+  // Tapi dibiarkan agar tidak error jika ada referensi lain.
+  Future<void> startCapture() async { /* ... code lama ... */ }
+  Future<void> stopCapture() async { /* ... code lama ... */ }
 }
