@@ -22,6 +22,11 @@ class JournalNotifier extends StateNotifier<List<DailyJournal>> {
   void clearJournals() {
     state = [];
   }
+
+  // TAMBAHKAN INI AGAR ERROR DI UI HILANG
+  void clearJournal() {
+    state = [];
+  }
 }
 
 final journalProvider =

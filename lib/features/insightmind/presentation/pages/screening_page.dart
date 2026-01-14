@@ -8,6 +8,9 @@ import '../providers/test_provider.dart';
 import '../providers/history_provider.dart';
 import '../../domain/entities/history_item.dart';
 import 'result_page.dart';
+import 'dart:convert'; // WAJIB
+import 'package:http/http.dart' as http; // WAJIB
+import 'package:insightmind_app/core/api_config.dart'; // WAJIB, sesuaikan folder jika beda
 
 class ScreeningPage extends ConsumerStatefulWidget {
   const ScreeningPage({super.key});
@@ -112,6 +115,18 @@ class ScreeningQuestionnairePage extends ConsumerWidget {
 
   const ScreeningQuestionnairePage({super.key, required this.testType});
 
+  Future<void> _saveToCloud(HistoryItem item) async {
+    try {
+      await http.post(
+        Uri.parse(ApiConfig.history),
+        headers: ApiConfig.headers,
+        body: jsonEncode(item.toJson()),
+      );
+    } catch (e) {
+      debugPrint("Gagal simpan: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final questions = testType == 'PHQ-9' ? phq9Questions : dass21Questions;
@@ -171,82 +186,90 @@ class ScreeningQuestionnairePage extends ConsumerWidget {
 
           // Submit button
           FilledButton.icon(
-            icon: const Icon(Icons.check_circle_outline),
-            label: const Text('Lihat Hasil'),
-            onPressed: () {
-              if (!qState.isComplete) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Lengkapi semua pertanyaan sebelum melihat hasil.',
-                    ),
-                  ),
-                );
-                return;
-              }
+  icon: const Icon(Icons.check_circle_outline),
+  label: const Text('Lihat Hasil'),
+onPressed: () async {
+  if (!qState.isComplete) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Lengkapi semua pertanyaan.')),
+    );
+    return;
+  }
 
-              // Convert answers
-              final ordered = <int>[];
-              for (final q in questions) {
-                ordered.add(qState.answers[q.id]!);
-              }
-              final score = ordered.reduce((a, b) => a + b);
+  // Perhitungan skor (Tetap seperti kode Anda)
+  final ordered = questions.map((q) => qState.answers[q.id]!).toList();
+  final score = ordered.reduce((a, b) => a + b);
 
-              // Determine risk level based on test type
-              String riskLevel;
-              if (testType == 'PHQ-9') {
-                if (score >= 20) {
-                  riskLevel = 'Tinggi';
-                } else if (score >= 10) {
-                  riskLevel = 'Sedang';
-                } else {
-                  riskLevel = 'Rendah';
-                }
-              } else {
-                // DASS-21 scoring (simplified)
-                if (score >= 42) {
-                  riskLevel = 'Tinggi';
-                } else if (score >= 21) {
-                  riskLevel = 'Sedang';
-                } else {
-                  riskLevel = 'Rendah';
-                }
-              }
+  String riskLevel;
+  if (testType == 'PHQ-9') {
+    riskLevel = score >= 20 ? 'Tinggi' : (score >= 10 ? 'Sedang' : 'Rendah');
+  } else {
+    riskLevel = score >= 42 ? 'Tinggi' : (score >= 21 ? 'Sedang' : 'Rendah');
+  }
 
-              // Save to history (legacy format for compatibility)
-              ref.read(historyProvider.notifier).addHistoryItem(
-                    HistoryItem(
-                      id: const Uuid().v4(),
-                      date: DateTime.now(),
-                      answers: ordered,
-                      score: score,
-                      riskLevel: riskLevel,
-                      testType: testType,
-                    ),
-                  );
+  final historyEntry = HistoryItem(
+    id: const Uuid().v4(),
+    date: DateTime.now(),
+    answers: ordered,
+    score: score,
+    riskLevel: riskLevel,
+    testType: testType,
+  );
 
-              // Save to test results
-              final testResult = TestResult(
-                id: const Uuid().v4(),
-                date: DateTime.now(),
-                testType: testType,
-                answers: ordered,
-                score: score,
-                riskLevel: riskLevel,
-              );
-              ref.read(testProvider.notifier).addTest(testResult);
+  // --- LOGIKA SIMPAN BARU ---
+try {
+      debugPrint("Mengirim ke Cloud: ${ApiConfig.history}");
+      
+      final response = await http.post(
+        Uri.parse(ApiConfig.history),
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: jsonEncode(historyEntry.toJson()),
+      ).timeout(const Duration(seconds: 10)); // Mencegah proses menggantung
 
-              // Reset questionnaire for next use
-              ref.read(questionnaireProvider.notifier).reset();
+      debugPrint("Server Response: ${response.statusCode}");
 
-              // Navigate to result
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => ScreeningResultPage(testResult: testResult),
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        debugPrint("Database Cloud: Berhasil Simpan");
+        // Update provider lokal
+        ref.read(historyProvider.notifier).addHistoryItem(historyEntry);
+      } else {
+        debugPrint("Gagal Simpan: ${response.body}");
+      }
+    } catch (e) {
+      debugPrint("Masalah Jaringan: $e");
+    }
+    // ==========================================================
+
+    // --- 4. UPDATE PROVIDER LOKAL ---
+    ref.read(historyProvider.notifier).addHistoryItem(historyEntry);
+
+    // Save to test results
+    final testResult = TestResult(
+      id: historyEntry.id,
+      date: historyEntry.date,
+      testType: testType,
+      answers: ordered,
+      score: score,
+      riskLevel: riskLevel,
+    );
+    ref.read(testProvider.notifier).addTest(testResult);
+
+    // Reset questionnaire for next use
+    ref.read(questionnaireProvider.notifier).reset();
+
+    // --- 5. NAVIGASI KE HALAMAN HASIL ---
+    if (context.mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ScreeningResultPage(testResult: testResult),
                 ),
               );
-            },
-          ),
+            }
+          },
+        ),
         ],
       ),
     );

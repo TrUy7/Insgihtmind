@@ -2,30 +2,27 @@ class DailyJournal {
   final String id;
   final DateTime date;
   final String content;
-  final String mood; // e.g., 'Happy', 'Sad', 'Neutral', etc.
+  final String mood;
 
-  const DailyJournal({
+  DailyJournal({
     required this.id,
     required this.date,
     required this.content,
     required this.mood,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'date': date.toIso8601String(),
-      'content': content,
-      'mood': mood,
-    };
-  }
+  // Pastikan field ini (id, date, content, mood) sama persis dengan req.body di Node.js
+  Map<String, dynamic> toJson() => {
+    'id': id, 
+    'date': date.toIso8601String(),
+    'content': content,
+    'mood': mood,
+  };
 
-  factory DailyJournal.fromJson(Map<String, dynamic> json) {
-    return DailyJournal(
-      id: json['id'],
-      date: DateTime.parse(json['date']),
-      content: json['content'],
-      mood: json['mood'],
-    );
-  }
+  factory DailyJournal.fromJson(Map<String, dynamic> json) => DailyJournal(
+    id: json['id'] ?? '',
+    date: DateTime.parse(json['date']),
+    content: json['content'] ?? '',
+    mood: json['mood'] ?? 'Neutral',
+  );
 }
