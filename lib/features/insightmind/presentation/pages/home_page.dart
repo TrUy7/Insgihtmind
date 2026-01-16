@@ -77,7 +77,7 @@ class HomePage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Aplikasi cerdas untuk memantau kesehatan mental Anda.',
+                    'Aplikasi cerdas untuk memantau kesehatan mental Kamu.',
                     style: TextStyle(fontSize: 16, color: Colors.white),
                     textAlign: TextAlign.center,
                   ),
@@ -525,7 +525,7 @@ class _ModernFeatureCard extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: Colors.white,
               fontWeight: FontWeight.bold,
             ),

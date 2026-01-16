@@ -69,7 +69,7 @@ class ReportsPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Pantau perkembangan kesehatan mental Anda',
+                    'Pantau perkembangan kesehatan mental Kamu',
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.white.withOpacity(0.9),

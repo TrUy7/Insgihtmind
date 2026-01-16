@@ -292,7 +292,7 @@ class ScreeningResultPage extends StatelessWidget {
         break;
       case 'Sedang':
         recommendation =
-            'Lakukan aktivitas relaksasi (napas dalam, olahraga ringan), '
+            'Lakukan aktivitas relaksasi (nafas dalam, olahraga ringan), '
             'atur waktu, dan evaluasi beban kuliah atau kerja.';
         break;
       default:
