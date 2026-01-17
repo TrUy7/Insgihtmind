@@ -1,11 +1,15 @@
+# ======================
 # Flutter
+# ======================
 .dart_tool/
 .packages
 .pub-cache/
 .pub/
 build/
 
+# ======================
 # Android / Gradle
+# ======================
 .gradle/
 local.properties
 .cxx/
@@ -13,22 +17,34 @@ local.properties
 # Generated files
 android/app/src/main/java/**/GeneratedPluginRegistrant.java
 
+# ======================
 # iOS / macOS
+# ======================
 ios/Flutter/Generated.xcconfig
 ios/Flutter/GeneratedPluginRegistrant.*
 macos/Flutter/GeneratedPluginRegistrant.*
 
+# ======================
 # Keystore (SECURITY)
+# ======================
 key.properties
 **/*.keystore
 **/*.jks
 
-# OS
-.DS_Store
-Thumbs.db
+# ======================
+# Firebase / GCP Secrets
+# ======================
+**/serviceAccountKey.json
+**/serviceAccountKey*.json
 
-# Node
+# ======================
+# Node.js
+# ======================
 node_modules/
 Project-PAM/backend/node_modules/
 
-Project-PAM/
+# ======================
+# OS
+# ======================
+.DS_Store
+Thumbs.db
