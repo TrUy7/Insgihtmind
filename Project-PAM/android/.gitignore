@@ -1,0 +1,34 @@
+# Flutter
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android / Gradle
+.gradle/
+local.properties
+.cxx/
+
+# Generated files
+android/app/src/main/java/**/GeneratedPluginRegistrant.java
+
+# iOS / macOS
+ios/Flutter/Generated.xcconfig
+ios/Flutter/GeneratedPluginRegistrant.*
+macos/Flutter/GeneratedPluginRegistrant.*
+
+# Keystore (SECURITY)
+key.properties
+**/*.keystore
+**/*.jks
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+Project-PAM/backend/node_modules/
+
+Project-PAM/
