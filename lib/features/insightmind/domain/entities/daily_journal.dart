@@ -19,10 +19,15 @@ class DailyJournal {
     'mood': mood,
   };
 
-  factory DailyJournal.fromJson(Map<String, dynamic> json) => DailyJournal(
-    id: json['id'] ?? '',
-    date: DateTime.parse(json['date']),
-    content: json['content'] ?? '',
-    mood: json['mood'] ?? 'Neutral',
+factory DailyJournal.fromJson(Map<String, dynamic> json) {
+  return DailyJournal(
+    id: json['id']?.toString() ?? '',
+    // Gunakan tryParse agar lebih aman
+    date: json['date'] != null 
+        ? (DateTime.tryParse(json['date'].toString()) ?? DateTime.now()) 
+        : DateTime.now(),
+    content: json['content']?.toString() ?? '',
+    mood: json['mood']?.toString() ?? 'Neutral',
   );
+}
 }
