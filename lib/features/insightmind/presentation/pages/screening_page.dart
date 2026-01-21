@@ -8,9 +8,10 @@ import '../providers/test_provider.dart';
 import '../providers/history_provider.dart';
 import '../../domain/entities/history_item.dart';
 import 'result_page.dart';
-import 'dart:convert'; // WAJIB
-import 'package:http/http.dart' as http; // WAJIB
-import 'package:insightmind_app/core/api_config.dart'; // WAJIB, sesuaikan folder jika beda
+import 'dart:convert'; 
+import 'package:http/http.dart' as http; 
+import 'package:insightmind_app/core/api_config.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
 
 class ScreeningPage extends ConsumerStatefulWidget {
   const ScreeningPage({super.key});
@@ -196,9 +197,14 @@ onPressed: () async {
     return;
   }
 
-  // Perhitungan skor (Tetap seperti kode Anda)
-  final ordered = questions.map((q) => qState.answers[q.id]!).toList();
-  final score = ordered.reduce((a, b) => a + b);
+  // 1. PAKSA ordered menjadi List<int> agar tidak menjadi double
+  final List<int> ordered = questions.map((q) {
+    final val = qState.answers[q.id]!;
+    return val.toInt(); // Pastikan benar-benar integer
+  }).toList();
+
+  // 2. PAKSA score menjadi int
+  final int score = ordered.reduce((a, b) => a + b).toInt();
 
   String riskLevel;
   if (testType == 'PHQ-9') {
@@ -216,31 +222,30 @@ onPressed: () async {
     testType: testType,
   );
 
-  // --- LOGIKA SIMPAN BARU ---
-try {
-      debugPrint("Mengirim ke Cloud: ${ApiConfig.history}");
-      
-      final response = await http.post(
-        Uri.parse(ApiConfig.history),
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        body: jsonEncode(historyEntry.toJson()),
-      ).timeout(const Duration(seconds: 10)); // Mencegah proses menggantung
+  // --- LOGIKA SIMPAN CLOUD ---
+  try {
+    debugPrint("Mengirim ke Cloud: ${ApiConfig.history}");
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    
+    final response = await http.post(
+      Uri.parse(ApiConfig.history),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token", 
+      },
+      // jsonEncode akan mengirim integer murni berkat langkah .toInt() di atas
+      body: jsonEncode(historyEntry.toJson()),
+    ).timeout(const Duration(seconds: 10));
 
-      debugPrint("Server Response: ${response.statusCode}");
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        debugPrint("Database Cloud: Berhasil Simpan");
-        // Update provider lokal
-        ref.read(historyProvider.notifier).addHistoryItem(historyEntry);
-      } else {
-        debugPrint("Gagal Simpan: ${response.body}");
-      }
-    } catch (e) {
-      debugPrint("Masalah Jaringan: $e");
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      debugPrint("Berhasil Simpan");
+      ref.read(historyProvider.notifier).addHistoryItem(historyEntry);
+    } else {
+      debugPrint("Gagal Simpan: ${response.statusCode}");
     }
+  } catch (e) {
+    debugPrint("Masalah Jaringan: $e");
+  }
     // ==========================================================
 
     // --- 4. UPDATE PROVIDER LOKAL ---
