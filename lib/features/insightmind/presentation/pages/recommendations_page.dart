@@ -126,12 +126,12 @@ class RecommendationsPage extends ConsumerWidget {
                   _buildTipItem(
                     icon: Icons.directions_run,
                     title: 'Olahraga Teratur',
-                    description: 'Lakukan aktivitas fisik minimal 30 menit per hari, seperti jalan kaki atau yoga.',
+                    description: 'Lakukan aktivitas fisik minimal 40 menit per hari seperti jalan kaki.',
                   ),
                   _buildTipItem(
                     icon: Icons.people,
                     title: 'Sosialisasi',
-                    description: 'Jaga hubungan dengan keluarga dan teman. Jangan ragu meminta dukungan.',
+                    description: 'Jaga hubungan dengan keluarga dan teman.',
                   ),
                   _buildTipItem(
                     icon: Icons.self_improvement,
