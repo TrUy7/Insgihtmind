@@ -1,6 +1,7 @@
 // WEEK 6 UI: BIOMETRIC PAGE
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:insightmind_app/features/insightmind/presentation/pages/sensor_capture_page.dart'; // Pastikan import ini sesuai struktur folder Anda
 
 import '../providers/sensors_provider.dart';
 import '../providers/ppg_provider.dart';
@@ -39,7 +40,7 @@ class BiometricPage extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // ----- PPG CAMERA -----
+          // ----- PPG CAMERA (Lingkaran Biru pada Request Anda) -----
           Card(
             elevation: 2,
             child: Padding(
@@ -51,6 +52,7 @@ class BiometricPage extends ConsumerWidget {
                     'PPG via Kamera',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
+                  // Data ini akan otomatis terupdate setelah scan selesai
                   Text('Mean Y: ${ppg.mean.toStringAsFixed(6)}'),
                   Text('Variance: ${ppg.variance.toStringAsFixed(6)}'),
                   Text('Samples: ${ppg.samples.length}'),
@@ -59,15 +61,15 @@ class BiometricPage extends ConsumerWidget {
 
                   FilledButton(
                     onPressed: () {
-                      if (!ppg.capturing) {
-                        ref.read(ppgProvider.notifier).startCapture();
-                      } else {
-                        ref.read(ppgProvider.notifier).stopCapture();
-                      }
+                      // Navigasi ke halaman Scan Biometrik
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SensorCapturePage(),
+                        ),
+                      );
                     },
-                    child: Text(
-                      ppg.capturing ? 'Stop Capture' : 'Start Capture',
-                    ),
+                    child: const Text('Buka Scanner'),
                   ),
                 ],
               ),
