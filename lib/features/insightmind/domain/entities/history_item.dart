@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 class HistoryItem {
   final String id;
   final DateTime date;
@@ -26,19 +27,36 @@ class HistoryItem {
     };
   }
 
-  factory HistoryItem.fromJson(Map<String, dynamic> json) {
-    return HistoryItem(
-      id: json['id']?.toString() ?? '',
-      // Parsing tanggal yang lebih aman
-      date: json['date'] != null 
-          ? DateTime.parse(json['date'].toString()) 
-          : DateTime.now(),
-      // Menangani casting List secara eksplisit
-      answers: (json['answers'] as List?)?.map((e) => e as int).toList() ?? [],
-      // Mencegah error jika score terbaca sebagai double dari JSON
-      score: (json['score'] is num) ? (json['score'] as num).toInt() : 0,
-      riskLevel: json['riskLevel']?.toString() ?? 'Tidak Diketahui',
-      testType: json['testType']?.toString() ?? 'PHQ-9',
-    );
+factory HistoryItem.fromJson(Map<String, dynamic> json) {
+  DateTime parsedDate;
+  try {
+    if (json['date'] == null) {
+      parsedDate = DateTime.now();
+    } else if (json['date'] is String) {
+      parsedDate = DateTime.parse(json['date']);
+    } else if (json['date'] is Map && json['date']['_seconds'] != null) {
+      parsedDate = DateTime.fromMillisecondsSinceEpoch(json['date']['_seconds'] * 1000);
+    } else {
+      parsedDate = DateTime.now();
+    }
+  } catch (e) {
+    parsedDate = DateTime.now();
+    debugPrint("Gagal parsing tanggal: $e");
   }
+
+  return HistoryItem(
+    id: json['id']?.toString() ?? '',
+    date: parsedDate,
+    // PAKSA elemen list menjadi int murni
+    answers: (json['answers'] as List?)
+            ?.map((e) => double.parse(e.toString()).toInt())
+            .toList() ?? [],
+    // PAKSA score menjadi int murni
+    score: json['score'] != null 
+        ? double.parse(json['score'].toString()).toInt() 
+        : 0,
+    riskLevel: json['riskLevel']?.toString() ?? 'Tidak Diketahui',
+    testType: json['testType']?.toString() ?? 'PHQ-9',
+  );
+}
 }

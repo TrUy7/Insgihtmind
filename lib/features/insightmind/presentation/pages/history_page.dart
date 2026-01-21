@@ -7,6 +7,8 @@ import '../providers/history_provider.dart';
 import 'package:insightmind_app/core/api_config.dart';
 import '../../domain/entities/history_item.dart';
 import 'package:insightmind_app/core/service/pdf_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});
@@ -24,51 +26,71 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     Future.microtask(() => _fetchHistoryFromDatabase());
   }
 
-  Future<void> _fetchHistoryFromDatabase() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+// Di dalam file history_page.dart
+Future<void> _fetchHistoryFromDatabase() async {
+  if (!mounted) return;
+  setState(() => _isLoading = true);
 
-    try {
+  try {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    
+    if (token != null) {
+      // PANGGIL API NODE.JS (Bukan Firestore Langsung)
       final response = await http.get(
         Uri.parse(ApiConfig.history),
-        headers: ApiConfig.headers,
-      ).timeout(const Duration(seconds: 10));
+        headers: {
+          "Authorization": "Bearer $token", // Wajib untuk verifyToken di Node.js
+        },
+      );
 
       if (response.statusCode == 200) {
-        final List decodedData = jsonDecode(response.body);
-        final List<HistoryItem> fetchedItems = decodedData.map((itemJson) {
-          return HistoryItem.fromJson(itemJson);
-        }).toList();
+        final List data = jsonDecode(response.body);
+        
+        // Mengonversi data JSON menggunakan model HistoryItem.fromJson Anda yang baru
+        final fetchedItems = data.map((json) => HistoryItem.fromJson(json)).toList();
 
-        // Sorting Client-Side (Backup)
-        fetchedItems.sort((a, b) => b.date.compareTo(a.date));
-
+        // Bersihkan state lama dan perbarui dengan data baru yang sudah benar
         ref.read(historyProvider.notifier).clearHistory();
         for (var item in fetchedItems) {
           ref.read(historyProvider.notifier).addHistory(item);
         }
+        debugPrint("Riwayat berhasil dimuat");
       }
-    } catch (e) {
-      debugPrint("Kesalahan Jaringan: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+  } catch (e) {
+    debugPrint("Gagal Muat Riwayat: $e");
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
-
+}
   Future<void> _deleteFromDatabase(String id) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('${ApiConfig.history}/$id'),
-        headers: ApiConfig.headers,
-      );
+  try {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    
+    final response = await http.delete(
+      Uri.parse('${ApiConfig.history}/$id'),
+      headers: {
+        ...ApiConfig.headers,
+        'Authorization': 'Bearer $token', // WAJIB untuk verifyToken
+      },
+    );
 
-      if (response.statusCode == 200) {
-        ref.read(historyProvider.notifier).removeHistory(id);
+    if (response.statusCode == 200) {
+      // Hapus dari tampilan lokal (Riverpod)
+      ref.read(historyProvider.notifier).removeHistory(id);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Riwayat berhasil dihapus dari Cloud')),
+        );
       }
-    } catch (e) {
-      debugPrint("Failed to delete from cloud: $e");
+    } else {
+      debugPrint("Gagal hapus di server: ${response.body}");
     }
+  } catch (e) {
+    debugPrint("Failed to delete from cloud: $e");
   }
+}
 
   // --- LOGIKA HAPUS SEMUA (OPTIMAL) ---
   Future<void> _deleteAllHistory() async {

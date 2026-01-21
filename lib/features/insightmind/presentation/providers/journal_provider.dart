@@ -1,9 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/daily_journal.dart';
-import 'package:uuid/uuid.dart';
 
 class JournalNotifier extends StateNotifier<List<DailyJournal>> {
   JournalNotifier() : super([]);
+
+  // --- TAMBAHKAN FUNGSI INI ---
+  // Berfungsi untuk mengupdate seluruh daftar jurnal dari backend
+  void setJournals(List<DailyJournal> journals) {
+    state = journals;
+  }
 
   void addJournal(DailyJournal journal) {
     state = [...state, journal];
@@ -19,11 +24,7 @@ class JournalNotifier extends StateNotifier<List<DailyJournal>> {
     ).toList();
   }
 
-  void clearJournals() {
-    state = [];
-  }
-
-  // TAMBAHKAN INI AGAR ERROR DI UI HILANG
+  // Alias untuk sinkronisasi dengan pemanggilan di UI
   void clearJournal() {
     state = [];
   }
