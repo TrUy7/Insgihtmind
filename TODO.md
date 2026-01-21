@@ -20,3 +20,6 @@
 - [x] Test navigation and new features
 - [x] Ensure charts display correctly
 
+
+
+
