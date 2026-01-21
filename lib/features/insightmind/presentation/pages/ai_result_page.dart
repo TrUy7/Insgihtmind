@@ -17,7 +17,7 @@ class AIResultPage extends ConsumerWidget {
     final conf = result['confidence'] as double;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("AI Risk Prediction"), elevation: 2),
+      appBar: AppBar(title: const Text("Prediksi Bahaya oleh AI"), elevation: 2),
       body: Center(
         child: Card(
           shape: RoundedRectangleBorder(
