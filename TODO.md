@@ -19,3 +19,7 @@
 - [x] Run flutter pub get
 - [x] Test navigation and new features
 - [x] Ensure charts display correctly
+
+
+
+
