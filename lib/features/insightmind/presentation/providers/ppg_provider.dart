@@ -57,3 +57,4 @@ class PpgNotifier extends StateNotifier<PpgState> {
   Future<void> startCapture() async { /* ... code lama ... */ }
   Future<void> stopCapture() async { /* ... code lama ... */ }
 }
+
