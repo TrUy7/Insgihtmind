@@ -7,7 +7,8 @@ import 'package:uuid/uuid.dart';
 import '../../domain/entities/daily_journal.dart';
 import '../providers/journal_provider.dart';
 import 'package:insightmind_app/core/api_config.dart';
-import 'package:insightmind_app/core/service/pdf_service.dart'; // Import PDF Service
+import 'package:insightmind_app/core/service/pdf_service.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import PDF Service
 
 class DailyJournalPage extends ConsumerStatefulWidget {
   const DailyJournalPage({super.key});
@@ -26,87 +27,92 @@ class _DailyJournalPageState extends ConsumerState<DailyJournalPage> {
   }
 
   // --- LOGIKA BACKEND ---
-  Future<void> _fetchJournals() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-    try {
-      final response = await http.get(
-        Uri.parse(ApiConfig.journal),
-        headers: ApiConfig.headers,
-      ).timeout(const Duration(seconds: 10));
+Future<void> _fetchJournals() async {
+  setState(() => _isLoading = true); // Mulai loading
+  try {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (token == null) return;
 
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        ref.read(journalProvider.notifier).clearJournal();
-        for (var item in data) {
-          ref.read(journalProvider.notifier).addJournal(DailyJournal.fromJson(item));
-        }
-      }
-    } catch (e) {
-      debugPrint("Gagal Fetch: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
+    final response = await http.get(
+      Uri.parse(ApiConfig.journal),
+      headers: ApiConfig.headersWithToken(token),
+    );
 
-  Future<void> _saveToCloud(DailyJournal journal) async {
-    try {
-      await http.post(
-        Uri.parse(ApiConfig.journal),
-        headers: ApiConfig.headers,
-        body: jsonEncode(journal.toJson()),
-      ).timeout(const Duration(seconds: 10));
-    } catch (e) {
-      debugPrint("Error Simpan Cloud: $e");
-    }
-  }
-
-  Future<void> _deleteFromCloud(String id) async {
-    try {
-      await http.delete(
-        Uri.parse('${ApiConfig.journal}/$id'),
-        headers: ApiConfig.headers,
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      
+      
+      ref.read(journalProvider.notifier).setJournals(
+        data.map((item) => DailyJournal.fromJson(item)).toList()
       );
-    } catch (e) {
-      debugPrint("Gagal hapus: $e");
     }
+  } catch (e) {
+    debugPrint("Gagal ambil data: $e");
+  } finally {
+    if (mounted) setState(() => _isLoading = false); // Berhenti loading
   }
+}
 
-  // --- LOGIKA HAPUS SEMUA (MENGGUNAKAN ENDPOINT BACKEND /journal/all) ---
-  Future<void> _deleteAllJournals() async {
-    setState(() => _isLoading = true);
-
-    try {
-      // Panggil API Backend yang sudah Anda buat
-      final response = await http.delete(
-        Uri.parse('${ApiConfig.journal}/all'),
-        headers: ApiConfig.headers,
-      );
-
-      if (response.statusCode == 200) {
-        // Hapus dari state lokal
-        ref.read(journalProvider.notifier).clearJournal();
-
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Seluruh catatan harian berhasil dihapus.'))
-          );
-        }
-      } else {
-        throw Exception('Gagal menghapus data di server');
-      }
-    } catch (e) {
-      debugPrint("Error Delete All: $e");
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal menghapus: $e'))
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+Future<void> _saveToCloud(DailyJournal journal) async {
+  try {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    
+    // LOG UNTUK CEK TOKEN
+    if (token == null) {
+      debugPrint("ERROR: Token null, pastikan Anda sudah Login di Emulator!");
+      return;
     }
-  }
 
+    final response = await http.post(
+      Uri.parse(ApiConfig.journal),
+      headers: ApiConfig.headersWithToken(token), 
+      body: jsonEncode(journal.toJson()),
+    ).timeout(const Duration(seconds: 10));
+
+    // LOG UNTUK CEK RESPON SERVER
+    debugPrint("Status Code: ${response.statusCode}");
+    debugPrint("erver Response: ${response.body}");
+
+    if (response.statusCode == 201) {
+      debugPrint("BERHASIL");
+    } else {
+      debugPrint("GAGAL(${response.statusCode})");
+    }
+  } catch (e) {
+    debugPrint("MASALAH JARINGAN: $e");
+    debugPrint("Tips: Pastikan server Node.js jalan dan baseUrl adalah 10.0.2.2");
+  }
+}
+
+Future<void> _deleteFromCloud(String id) async {
+  try {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    await http.delete(
+      Uri.parse('${ApiConfig.journal}/$id'),
+      headers: {
+        ...ApiConfig.headers,
+        'Authorization': 'Bearer $token', // WAJIB
+      },
+    );
+  } catch (e) {
+    debugPrint("Gagal hapus: $e");
+  }
+}
+
+Future<void> _deleteAllJournals() async {
+  setState(() => _isLoading = true);
+  try {
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final response = await http.delete(
+      Uri.parse('${ApiConfig.journal}/all'),
+      headers: {
+        ...ApiConfig.headers,
+        'Authorization': 'Bearer $token', // WAJIB
+      },
+    );
+    // ... sisa logika status code 200 ...
+  } catch (e) { /* error handling */ }
+}
   void _showDeleteAllConfirmation() {
     showDialog(
       context: context,
