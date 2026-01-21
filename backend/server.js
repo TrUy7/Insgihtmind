@@ -5,7 +5,7 @@ const routes = require('./routes');
 const app = express();
 
 // Middleware
-app.use(cors()); // Penting agar Flutter bisa akses API
+app.use(cors()); 
 app.use(express.json());
 
 // Jalur API Utama

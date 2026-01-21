@@ -5,13 +5,11 @@ const routes = require('./routes'); // Mengimpor rute yang sudah terhubung ke db
 const app = express();
 
 // 1. Middleware
-// CORS sangat penting agar Flutter (Client) bisa mengakses Node.js (Server)
 app.use(cors()); 
-// Express.json wajib ada agar server bisa membaca body JSON yang dikirim Flutter
+
 app.use(express.json()); 
 
 // 2. Jalur API Utama
-// Semua rute di file routes.js akan memiliki awalan /api
 app.use('/api', routes); 
 
 // 3. Jalankan Server

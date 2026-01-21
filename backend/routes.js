@@ -1,127 +1,189 @@
 const express = require('express');
 const router = express.Router();
 const db = require('./db');
+const admin = require('firebase-admin');
 
-// --- ENDPOINT HISTORY ---
+/**
+ * MIDDLEWARE: Verifikasi Token Firebase
+ * Memastikan setiap request memiliki token yang valid dari aplikasi Flutter.
+ */
+const verifyToken = async (req, res, next) => {
+    console.log(`[${new Date().toLocaleString()}] Request: ${req.method} ${req.originalUrl}`);
+    const idToken = req.headers.authorization?.split('Bearer ')[1];
+    
+    if (!idToken) {
+        console.log("Request ditolak: Token tidak ditemukan");
+        return res.status(401).json({ message: "Akses ditolak: Tidak ada token." });
+    }
 
-// GET: Ambil Semua Riwayat
-router.get('/history', async (req, res) => {
     try {
-        const snapshot = await db.collection('history').orderBy('date', 'desc').get();
-        const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        res.status(200).json(results);
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        req.user = decodedToken; 
+        console.log(`Token Valid. UID User: ${req.user.uid}`);
+        next();
     } catch (error) {
-        res.status(500).json({ message: "Gagal ambil data", error: error.message });
+        console.log("Token Salah:", error.message);
+        res.status(401).json({ message: "Sesi tidak valid." });
+    }
+};
+
+// --- 1. ENDPOINT REGISTER ---
+router.post('/register', async (req, res) => {
+    try {
+        const { uid, name, email } = req.body;
+        await db.collection('users').doc(uid).set({
+            name, email,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`Profile created for: ${email}`);
+        res.status(201).json({ message: "Profil user berhasil dibuat" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
-// POST: Simpan Riwayat Screening Baru
-router.post('/history', async (req, res) => {
-    console.log("Data History Masuk:", req.body); // Cek log ini di terminal laptop!
+// --- 2. ENDPOINT SCREENING HISTORY ---
+
+// POST: Simpan hasil screening ke tabel global
+router.post('/history', verifyToken, async (req, res) => {
     try {
         const data = req.body;
+        const uid = req.user.uid;
 
-        if (!data.id) {
-            return res.status(400).json({ message: "ID Riwayat diperlukan" });
-        }
-
-        // Simpan seluruh body sekaligus agar tidak ada data yang tertinggal
         await db.collection('history').doc(data.id).set({
             ...data,
-            timestamp: new Date() // Pastikan ada timestamp asli server untuk sorting
+            userId: uid, // Penanda kepemilikan data
+            date: data.date ? new Date(data.date) : new Date(),
+            serverTimestamp: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        console.log(`Riwayat ${data.testType} Berhasil disimpan.`);
+        console.log(`History ${data.testType} tersimpan untuk UID: ${uid}`);
         res.status(201).json({ message: "Riwayat berhasil disimpan!" });
     } catch (error) {
-        console.error("ERROR Post History:", error);
         res.status(500).json({ error: error.message });
     }
 });
-// DELETE ALL HISTORY
-router.delete('/history/all', async (req, res) => {
-    console.log("LOG: Menghapus semua riwayat...");
-    try {
-        const snapshot = await db.collection('history').get();
-        if (snapshot.empty) return res.status(200).json({ message: "Sudah kosong" });
 
+// GET: Ambil semua riwayat milik user
+router.get('/history', verifyToken, async (req, res) => {
+    try {
+        const uid = req.user.uid;
+        const snapshot = await db.collection('history')
+            .where('userId', '==', uid)
+            .get();
+
+        const history = snapshot.docs.map(doc => doc.data());
+        console.log(`Mengirim ${history.length} data history ke UID: ${uid}`);
+        res.status(200).json(history);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE: Hapus satu riwayat screening
+router.delete('/history/:id', verifyToken, async (req, res) => {
+    try {
+        const historyId = req.params.id;
+        const uid = req.user.uid;
+        const docRef = db.collection('history').doc(historyId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) return res.status(404).json({ error: "Data tidak ditemukan" });
+        if (doc.data().userId !== uid) return res.status(403).json({ error: "Akses ditolak" });
+
+        await docRef.delete();
+        res.status(200).json({ message: "Riwayat berhasil dihapus" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE ALL: Hapus semua riwayat screening user ini
+router.delete('/history/all', verifyToken, async (req, res) => {
+    try {
+        const uid = req.user.uid;
         const batch = db.batch();
+        const snapshot = await db.collection('history').where('userId', '==', uid).get();
+
         snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
-        
-        console.log("Semua riwayat berhasil dihapus");
-        res.status(200).json({ message: "Semua riwayat berhasil dihapus" });
+        res.status(200).json({ message: "Seluruh riwayat screening dihapus" });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// DELETE ONE HISTORY
-router.delete('/history/:id', async (req, res) => {
+// --- 3. ENDPOINT DAILY JOURNAL ---
+
+// POST: Simpan Jurnal
+router.post('/journal', verifyToken, async (req, res) => {
     try {
-        await db.collection('history').doc(req.params.id).delete();
-        res.status(200).json({ message: "Data berhasil dihapus" });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+        const { id, content, mood, date } = req.body;
+        const uid = req.user.uid;
 
-// --- ENDPOINT JOURNAL ---
-
-// GET ALL JOURNAL
-router.get('/journal', async (req, res) => {
-    try {
-        const snapshot = await db.collection('journal').orderBy('date', 'desc').get();
-        const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        res.status(200).json(results);
-    } catch (error) {
-        res.status(500).json({ message: "Gagal ambil jurnal", error: error.message });
-    }
-});
-
-// DELETE ALL JOURNAL
-router.delete('/journal/all', async (req, res) => {
-    console.log("LOG: Menghapus semua jurnal...");
-    try {
-        const snapshot = await db.collection('journal').get();
-        if (snapshot.empty) return res.status(200).json({ message: "Database sudah kosong" });
-
-        const batch = db.batch();
-        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-        await batch.commit();
-
-        console.log("Semua jurnal berhasil dihapus dari Firestore");
-        res.status(200).json({ message: "Semua jurnal berhasil dihapus" });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// DELETE ONE JOURNAL
-router.delete('/journal/:id', async (req, res) => {
-    try {
-        await db.collection('journal').doc(req.params.id).delete();
-        res.status(200).json({ message: "Jurnal berhasil dihapus" });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// POST JOURNAL
-router.post('/journal', async (req, res) => {
-    try {
-        const { id, date, content, mood } = req.body;
-        if (!id) return res.status(400).json({ message: "ID Jurnal diperlukan" });
-        
         await db.collection('journal').doc(id).set({
-            id, date, content, mood,
-            timestamp: new Date()
+            id,
+            userId: uid,
+            content,
+            mood,
+            date: new Date(date),
+            serverTimestamp: admin.firestore.FieldValue.serverTimestamp()
         });
-        res.status(201).json({ message: "Jurnal berhasil disimpan!" });
+
+        console.log(`Jurnal tersimpan untuk UID: ${uid}`);
+        res.status(201).json({ message: "Jurnal tersimpan!" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET: Ambil Jurnal
+router.get('/journal', verifyToken, async (req, res) => {
+    try {
+        const uid = req.user.uid;
+        const snapshot = await db.collection('journal')
+            .where('userId', '==', uid)
+            .get();
+
+        const journals = snapshot.docs.map(doc => doc.data());
+        res.status(200).json(journals);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE: Hapus satu jurnal
+router.delete('/journal/:id', verifyToken, async (req, res) => {
+    try {
+        const docId = req.params.id;
+        const docRef = db.collection('journal').doc(docId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) return res.status(404).json({ error: "Data tidak ditemukan" });
+        if (doc.data().userId !== req.user.uid) return res.status(403).json({ error: "Akses ditolak" });
+
+        await docRef.delete();
+        res.status(200).json({ message: "Jurnal dihapus" });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
+// DELETE ALL: Hapus semua jurnal user ini
+router.delete('/journal/all', verifyToken, async (req, res) => {
+    try {
+        const uid = req.user.uid;
+        const batch = db.batch();
+        // DIPERBAIKI: Mencari di koleksi global 'journal' berdasarkan userId
+        const snapshot = await db.collection('journal').where('userId', '==', uid).get();
+
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        console.log(`Seluruh jurnal UID ${uid} telah dihapus.`);
+        res.status(200).json({ message: "Seluruh jurnal dihapus" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 module.exports = router;
